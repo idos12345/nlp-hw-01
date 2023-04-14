@@ -81,22 +81,33 @@ def neg_sampling_loss_and_gradient(
     neg_sample_word_indices = get_negative_samples(outside_word_idx, dataset, K)
     indices = [outside_word_idx] + neg_sample_word_indices
 
+    # compute the logits
+    # scores = np.dot(outside_vectors[indices], center_word_vec)
+    # # convert to probabilities
+    # probOutsideWords = sigmoid(scores[0])
+    # probNegativeWords = sigmoid(-scores[1:])
+    # # compute the loss
+    # loss = -np.log(probOutsideWords) - np.sum(np.log(probNegativeWords))
+    # # compute the gradients with respect to the center word vector
+    # grad_center_vec = np.dot((probOutsideWords - 1.), outside_vectors[outside_word_idx]) + \
+    #                 np.sum((1.0 - probNegativeWords)[:, np.newaxis] * outside_vectors[neg_sample_word_indices], axis=0)
+    # # compute the gradients with respect to the outside word vectors
+    # grad_outside_vecs = np.zeros_like(outside_vectors)
+    # grad_outside_vecs[outside_word_idx] = (probOutsideWords - 1.) * center_word_vec
+    # for i in range(K):
+    #     grad_outside_vecs[neg_sample_word_indices[i]] += (1. - probNegativeWords[i]) * center_word_vec
     ### YOUR CODE HERE
     matmul = np.matmul(outside_vectors, center_word_vec)
-    loss = -1 * np.log(sigmoid(matmul[outside_word_idx])) - \
+    loss = -np.log(sigmoid(matmul[outside_word_idx])) - \
            np.sum([np.log(sigmoid(-1 * matmul[k])) for k in neg_sample_word_indices])
 
-    grad_center_vec = -1 * (1 - sigmoid(matmul[outside_word_idx])) * outside_vectors[outside_word_idx] + np.sum(
-        [1 - sigmoid(-1 * matmul[k]) for k in neg_sample_word_indices])
+    grad_center_vec = -(1 - sigmoid(matmul[outside_word_idx])) * outside_vectors[outside_word_idx] + \
+                      np.sum([(1 - sigmoid(-1 * matmul[k]))*outside_vectors[k] for k in neg_sample_word_indices], axis=0)
 
-    grad_outside_vecs = []
-    for i, u in enumerate(outside_vectors):
-        if i == outside_word_idx:
-            grad_outside_vecs.append(-1 * (1 - sigmoid(matmul[outside_word_idx])) * center_word_vec)
-        elif i in neg_sample_word_indices:
-            grad_outside_vecs.append((1 - sigmoid(-1 * matmul[i])) * center_word_vec)
-        else:
-            grad_outside_vecs.append(np.zeros(center_word_vec.shape))
+    grad_outside_vecs = np.zeros(outside_vectors.shape)
+    grad_outside_vecs[outside_word_idx] = (-(1 - sigmoid(matmul[outside_word_idx])) * center_word_vec)
+    for i in neg_sample_word_indices:
+        grad_outside_vecs[i] += ((1 - sigmoid(-matmul[i])) * center_word_vec)
         ### END YOUR CODE
 
     return loss, grad_center_vec, grad_outside_vecs
@@ -200,15 +211,15 @@ def test_word2vec_basic():
     dummy_vectors = normalize_rows(np.random.randn(10, 3))
     dummy_tokens = dict([("a", 0), ("b", 1), ("c", 2), ("d", 3), ("e", 4)])
 
-    # print("==== Gradient check for skip-gram with naive_softmax_loss_and_gradient ====")
-    # gradcheck_naive(lambda vec: word2vec_sgd_wrapper(
-    #     skipgram, dummy_tokens, vec, dataset, 5, naive_softmax_loss_and_gradient),
-    #     dummy_vectors, "naive_softmax_loss_and_gradient Gradient")
+    print("==== Gradient check for skip-gram with naive_softmax_loss_and_gradient ====")
+    gradcheck_naive(lambda vec: word2vec_sgd_wrapper(
+        skipgram, dummy_tokens, vec, dataset, 5, naive_softmax_loss_and_gradient),
+                    dummy_vectors, "naive_softmax_loss_and_gradient Gradient")
 
-    # print("==== Gradient check for skip-gram with neg_sampling_loss_and_gradient ====")
-    # gradcheck_naive(lambda vec: word2vec_sgd_wrapper(
-    #     skipgram, dummy_tokens, vec, dataset, 5, neg_sampling_loss_and_gradient),
-    #                 dummy_vectors, "neg_sampling_loss_and_gradient Gradient")
+    print("==== Gradient check for skip-gram with neg_sampling_loss_and_gradient ====")
+    gradcheck_naive(lambda vec: word2vec_sgd_wrapper(
+        skipgram, dummy_tokens, vec, dataset, 5, neg_sampling_loss_and_gradient),
+                    dummy_vectors, "neg_sampling_loss_and_gradient Gradient")
 
     print("\n=== Results ===")
     print("Skip-Gram with naive_softmax_loss_and_gradient")
